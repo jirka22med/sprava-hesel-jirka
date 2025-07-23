@@ -31,32 +31,46 @@ function initializeFirebase() {
             if (user) {
                 currentUserId = user.uid;
                 console.log("Uživatel přihlášen:", currentUserId);
-                // Po přihlášení uživatele se nic automaticky nenačítá,
-                // protože načtení hesel závisí na masterKey, který se musí zadat.
+                // Zavoláme globální funkci definovanou v index.html pro další zpracování
+                if (typeof window.onUserAuthenticated === 'function') {
+                    window.onUserAuthenticated(user);
+                }
             } else {
                 currentUserId = null;
                 console.log("Uživatel odhlášen.");
+                if (typeof window.onUserAuthenticated === 'function') {
+                    window.onUserAuthenticated(null); // Informujeme index.html o odhlášení
+                }
             }
         });
 
-        // Přihlášení uživatele. Použijeme buď custom token, pokud je k dispozici (pro Canvas),
-        // nebo anonymní přihlášení.
+        // V Canvasu se pokusíme přihlásit custom tokenem, pokud je k dispozici.
+        // Jinak se přihlášení provede až na základě interakce uživatele (např. Google login).
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
             auth.signInWithCustomToken(__initial_auth_token)
-                .then(() => console.log("Přihlášen custom tokenem."))
+                .then(() => console.log("Přihlášen custom tokenem (Canvas)."))
                 .catch(error => {
                     console.error("Chyba při přihlašování custom tokenem:", error);
-                    auth.signInAnonymously()
-                        .then(() => console.log("Přihlášen anonymně po chybě s tokenem."))
-                        .catch(err => console.error("Chyba při anonymním přihlašování:", err));
+                    // Pokud selže custom token, uživatel se bude muset přihlásit přes Google tlačítko
                 });
-        } else {
-            auth.signInAnonymously()
-                .then(() => console.log("Přihlášen anonymně."))
-                .catch(error => console.error("Chyba při anonymním přihlašování:", error));
         }
+        // Původní blok pro anonymní přihlášení byl odstraněn,
+        // aby se modal nezobrazoval hned při startu stránky bez interakce.
     }
 }
+
+// NOVÁ FUNKCE: Přihlášení přes Google
+async function signInWithGoogleProvider() {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    try {
+        await auth.signInWithPopup(provider);
+        console.log("Úspěšně přihlášen přes Google.");
+    } catch (error) {
+        console.error("Chyba při přihlášení přes Google:", error);
+        throw error; // Předáme chybu dál
+    }
+}
+
 
 // Funkce pro uložení hesel do Firestore
 // Přijímá pole hesel.
@@ -86,7 +100,7 @@ function savePasswordsToFirestore(passwords) {
 function loadPasswordsFromFirestore() {
     if (!currentUserId) {
         console.error("Uživatel není přihlášen. Nelze načíst hesla z Firestore.");
-        return Promise.resolve([]); 
+        return Promise.resolve(null); 
     }
 
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -109,7 +123,7 @@ function loadPasswordsFromFirestore() {
         });
 }
 
-// NOVÁ FUNKCE: Ukládání šifrovaného master klíče do Firestore
+// Ukládání šifrovaného master klíče do Firestore
 function saveEncryptedMasterKeyToFirestore(encryptedMasterKey) {
     if (!currentUserId) {
         console.error("Uživatel není přihlášen. Nelze uložit master klíč do Firestore.");
@@ -132,7 +146,7 @@ function saveEncryptedMasterKeyToFirestore(encryptedMasterKey) {
     });
 }
 
-// NOVÁ FUNKCE: Načítání šifrovaného master klíče z Firestore
+// Načítání šifrovaného master klíče z Firestore
 function loadEncryptedMasterKeyFromFirestore() {
     if (!currentUserId) {
         console.error("Uživatel není přihlášen. Nelze načíst master klíč z Firestore.");
