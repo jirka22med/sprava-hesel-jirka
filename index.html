@@ -197,22 +197,29 @@
 /* Styly pro tmavý režim */
 body.dark-mode   {
     --background-color: #222222; /* Tmavě šedá */
-    --text-color: white; /* Světle šedá */
+    --text-color: green; /* Světle šedá */
     --button-background: #6610f2; /* Fialová */
     --button-text: #ffffff; /* Bílá */
     --border-color: #555555; /* Tmavší šedá */
 }
 
 /* Aplikace proměnných na elementy */
-body, #mainContent, .container,  h1, #passwordTable  {
+body, #mainContent, .container,  h1, #passwordTable, th   {
     background-color: var(--background-color);
     color: var(--text-color);
     transition: background-color 0.3s ease, color 0.3s ease; /* Plynulý přechod */
     font-family: Arial, sans-serif; /* Příklad fontu */
 }
-
+        #theme-toggle{
+        background-color: transparent;
+        font-size: 25px;    
+        }
  
-
+#theme-toggle:hover { 
+            background: green;
+             
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
     </style>
     <!-- CryptoJS AES -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
@@ -224,7 +231,7 @@ body, #mainContent, .container,  h1, #passwordTable  {
     <script src="firebase-logic.js"></script>
 </head>
 <body>
-    <button id="theme-toggle">Přepnout režim</button>
+    <button id="theme-toggle" title="Přepnout tmavý/světlý režim">🌓</button>
     <!-- Přihlášení -->
     <div id="loginForm" class="login-container container hidden"> <!-- Přidána třída hidden zde -->
         <h1>Přihlášení</h1>
