@@ -54,9 +54,15 @@
     </style>
     <!-- CryptoJS AES -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <!-- Tvůj Firebase logic soubor -->
+    <script src="firebase-logic.js"></script>
 </head>
 <body>
-   <!-- Přihlášení -->
+    <!-- Přihlášení -->
     <div id="loginForm" class="login-container container">
         <h1>Přihlášení</h1>
         <div class="form-group">
@@ -68,7 +74,7 @@
         </div>
         <button onclick="login()">Přihlásit</button>
         <button class="forgot" onclick="showReset()">Zapomněl(a) jsem heslo</button>
-    </div>-->
+    </div>
 
     <!-- Obnova hesla -->
     <div id="resetForm" class="reset-container container hidden">
@@ -90,7 +96,10 @@
         <div id="newPassStep" class="hidden">
             <div class="form-group">
                 <label for="newMaster">Nové master heslo:</label>
-                <input type="password" id="newMaster" placeholder="Nové heslo">
+                <div class="password-input-group">
+                    <input type="password" id="newMaster" placeholder="Nové heslo">
+                    <button type="button" class="password-toggle" onclick="togglePasswordVisibility('newMaster')">👁️</button>
+                </div>
             </div>
             <button onclick="resetMasterKey()">Nastavit nové heslo</button>
         </div>
@@ -111,7 +120,10 @@
         </div>
         <div class="form-group">
             <label for="password">Heslo:</label>
-            <input type="password" id="password" placeholder="Heslo">
+            <div class="password-input-group">
+                <input type="password" id="password" placeholder="Heslo">
+                <button type="button" class="password-toggle" onclick="togglePasswordVisibility('password')">👁️</button>
+            </div>
         </div>
         <button onclick="savePassword()">Uložit</button>
         
@@ -126,18 +138,13 @@
             <tbody></tbody>
         </table>
     </div>
-<!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="firebase-logic.js"></script>
+
     <script>
-        const STORAGE_KEY = 'encryptedPasswords';
+        const STORAGE_KEY = 'encryptedPasswords'; // Toto už se nebude používat pro ukládání hesel, ale pro kompatibilitu s decryptData
         const EMAIL_KEY = 'registeredEmail';
-        let masterKey = '';
+        let masterKey = ''; // Toto bude skutečný master klíč po dešifrování
         let otpCode = '';
-           
-        
+
         // Funkce pro přepínání viditelnosti hesla
         function togglePasswordVisibility(inputId) {
             const input = document.getElementById(inputId);
@@ -147,15 +154,58 @@
                 input.type = 'password';
             }
         }
-        
-        function login() {
-            const pwd = document.getElementById('loginPassword').value;
-            if (!pwd) return alert('Zadejte master heslo');
-            masterKey = pwd;
-            document.getElementById('loginPassword').value = '';
-            loadPasswords();
-            document.getElementById('loginForm').classList.add('hidden');
-            document.getElementById('mainContent').classList.remove('hidden');
+
+        // Původní funkce login, upravená pro Firestore a načítání master klíče
+        async function login() {
+            const loginPassword = document.getElementById('loginPassword').value;
+            if (!loginPassword) {
+                alert('Zadejte master heslo');
+                return;
+            }
+
+            // Pokusíme se načíst šifrovaný master klíč z Firestore
+            try {
+                const encryptedMasterKeyFromFirestore = await loadEncryptedMasterKeyFromFirestore();
+
+                if (encryptedMasterKeyFromFirestore) {
+                    // Pokud klíč existuje, pokusíme se ho dešifrovat pomocí zadaného loginPassword
+                    try {
+                        const bytes = CryptoJS.AES.decrypt(encryptedMasterKeyFromFirestore, loginPassword);
+                        const decryptedMasterKey = bytes.toString(CryptoJS.enc.Utf8);
+                        if (decryptedMasterKey) {
+                            masterKey = decryptedMasterKey; // Nastavíme globální masterKey
+                            document.getElementById('loginPassword').value = '';
+                            await loadPasswords(); // Načteme hesla pomocí nově získaného masterKey
+                            document.getElementById('loginForm').classList.add('hidden');
+                            document.getElementById('mainContent').classList.remove('hidden');
+                        } else {
+                            alert('Špatné master heslo nebo poškozený klíč.');
+                        }
+                    } catch (e) {
+                        alert('Špatné master heslo.');
+                        console.error("Chyba při dešifrování master klíče:", e);
+                    }
+                } else {
+                    // Pokud master klíč ve Firestore neexistuje, jedná se o první přihlášení
+                    // Zadané loginPassword se stane master klíčem a uloží se šifrovaně do Firestore
+                    const confirmFirstSetup = confirm('Master heslo nebylo nalezeno. Chcete nastavit toto heslo jako vaše nové master heslo?');
+                    if (confirmFirstSetup) {
+                        masterKey = loginPassword; // Zadané heslo je nyní master klíč
+                        const encryptedMasterKey = CryptoJS.AES.encrypt(masterKey, loginPassword).toString(); // Šifrujeme master klíč sám sebou
+                        await saveEncryptedMasterKeyToFirestore(encryptedMasterKey);
+                        document.getElementById('loginPassword').value = '';
+                        // Není potřeba načítat hesla, protože žádná ještě nejsou
+                        document.getElementById('loginForm').classList.add('hidden');
+                        document.getElementById('mainContent').classList.remove('hidden');
+                        alert('Master heslo úspěšně nastaveno a uloženo!');
+                    } else {
+                        alert('Nastavení master hesla zrušeno.');
+                    }
+                }
+            } catch (error) {
+                console.error("Chyba při komunikaci s Firestore pro master klíč:", error);
+                alert('Chyba při načítání master klíče z cloudu. Zkuste to znovu.');
+            }
         }
 
         function logout() {
@@ -177,7 +227,10 @@
 
         function sendOTP() {
             const email = document.getElementById('resetEmail').value;
-            if (!email) return alert('Zadejte email');
+            if (!email) {
+                alert('Zadejte email');
+                return;
+            }
             localStorage.setItem(EMAIL_KEY, email);
             otpCode = Math.floor(100000 + Math.random() * 900000).toString();
             alert(`Váš OTP kód (pro testovací účely): ${otpCode}`);
@@ -185,7 +238,7 @@
             document.getElementById('otpStep').classList.remove('hidden');
         }
 
-        function verifyOTP() {
+        async function verifyOTP() {
             const entered = document.getElementById('resetOTP').value;
             if (entered === otpCode) {
                 document.getElementById('otpStep').classList.add('hidden');
@@ -195,91 +248,139 @@
             }
         }
 
-        function resetMasterKey() {
+        async function resetMasterKey() {
             const newKey = document.getElementById('newMaster').value;
-            if (!newKey) return alert('Zadejte nové heslo');
-            masterKey = newKey;
-            clearTable();
-            alert('Master heslo bylo úspěšně resetováno! Přihlaste se novým heslem.');
-            document.getElementById('resetForm').classList.add('hidden');
-            document.getElementById('loginForm').classList.remove('hidden');
+            if (!newKey) {
+                alert('Zadejte nové heslo');
+                return;
+            }
+            
+            // Nový master klíč se stane klíčem pro šifrování dat
+            masterKey = newKey; 
+            // A také klíčem, kterým se šifruje samotný master klíč pro uložení do Firestore
+            const encryptedMasterKey = CryptoJS.AES.encrypt(masterKey, newKey).toString(); 
+
+            try {
+                await saveEncryptedMasterKeyToFirestore(encryptedMasterKey);
+                clearTable();
+                alert('Master heslo bylo úspěšně resetováno a uloženo do cloudu! Přihlaste se novým heslem.');
+                document.getElementById('resetForm').classList.add('hidden');
+                document.getElementById('loginForm').classList.remove('hidden');
+            } catch (error) {
+                console.error("Chyba při resetování master klíče do Firestore:", error);
+                alert('Chyba při resetování master klíče do cloudu.');
+            }
         }
 
         function encryptData(data) {
+            // Používá globální masterKey, který je načten z Firestore
             return CryptoJS.AES.encrypt(JSON.stringify(data), masterKey).toString();
         }
 
         function decryptData(cipher) {
             try {
+                // Používá globální masterKey, který je načten z Firestore
                 const bytes = CryptoJS.AES.decrypt(cipher, masterKey);
                 const txt = bytes.toString(CryptoJS.enc.Utf8);
                 return JSON.parse(txt);
-            } catch {
+            } catch (e) {
+                console.error("Chyba při dešifrování dat hesel:", e);
+                // Pokud dešifrování selže, může to znamenat špatný master klíč nebo poškozená data
+                alert('Chyba při dešifrování hesel. Zkontrolujte master heslo.');
                 return [];
             }
         }
 
         // Nová verze savePassword pro Firestore
-async function savePassword() {
-    const service = document.getElementById('service').value;
-    const user = document.getElementById('username').value;
-    const pwd = document.getElementById('password').value;
-    if (!service || !user || !pwd) {
-        // Použij vlastní modal nebo zprávu, ne alert()
-        console.warn('Vyplňte všechna pole');
-        return;
-    }
+        async function savePassword() {
+            const service = document.getElementById('service').value;
+            const user = document.getElementById('username').value;
+            const pwd = document.getElementById('password').value;
+            if (!service || !user || !pwd) {
+                alert('Vyplňte všechna pole');
+                return;
+            }
+            if (!masterKey) { // Zajištění, že masterKey je nastaven
+                alert('Master heslo není nastaveno. Přihlaste se prosím.');
+                return;
+            }
 
-    let list = [];
-    // Nejprve načti aktuální hesla z Firestore
-    try {
-        list = await loadPasswordsFromFirestore();
-    } catch (error) {
-        console.error("Chyba při načítání hesel před uložením:", error);
-        // Zde bys mohl zobrazit uživateli zprávu o chybě
-        return;
-    }
+            let list = [];
+            try {
+                const encryptedList = await loadPasswordsFromFirestore();
+                if (encryptedList) { // Kontrola, zda existuje šifrovaný string
+                    list = decryptData(encryptedList); // Dešifrujeme data
+                }
+            } catch (error) {
+                console.error("Chyba při načítání hesel před uložením:", error);
+                alert('Chyba při načítání hesel před uložením.');
+                return;
+            }
 
-    list.push({ service, username: user, password: pwd });
+            list.push({ service, username: user, password: pwd });
 
-    // Uložit aktualizovaný seznam do Firestore
-    try {
-        await savePasswordsToFirestore(list);
-        loadPasswords(); // Načti a zobraz aktualizovaná hesla
-        clearForm();
-    } catch (error) {
-        console.error("Chyba při ukládání hesel do Firestore:", error);
-        // Zde bys mohl zobrazit uživateli zprávu o chybě
-    }
-}
+            try {
+                await savePasswordsToFirestore(encryptData(list)); // Uložíme šifrovaná data
+                await loadPasswords(); 
+                clearForm();
+            } catch (error) {
+                console.error("Chyba při ukládání hesel do Firestore:", error);
+                alert('Chyba při ukládání hesel do Firestore.');
+            }
+        }
 
         // Nová verze loadPasswords pro Firestore
-async function loadPasswords() {
-    clearTable();
-    try {
-        const list = await loadPasswordsFromFirestore();
-        const tbody = document.querySelector('#passwordTable tbody');
-        list.forEach((e, i) => {
-            const row = tbody.insertRow();
-            row.insertCell().textContent = e.service;
-            row.insertCell().textContent = e.username;
-            const pwdCell = row.insertCell(); pwdCell.textContent = e.password;
-            const actCell = row.insertCell(); actCell.innerHTML = `<button onclick="deletePassword(${i})">Smazat</button>`;
-        });
-    } catch (error) {
-        console.error("Chyba při načítání hesel z Firestore:", error);
-        // Zde bys mohl zobrazit uživateli zprávu o chybě
-    }
-}
+        async function loadPasswords() {
+            clearTable();
+            if (!masterKey) { // Zajištění, že masterKey je nastaven
+                console.warn('Master heslo není nastaveno. Nelze načíst hesla.');
+                return;
+            }
 
+            try {
+                const encryptedList = await loadPasswordsFromFirestore();
+                let list = [];
+                if (encryptedList) { // Kontrola, zda existuje šifrovaný string
+                    list = decryptData(encryptedList); // Dešifrujeme data
+                }
+                
+                const tbody = document.querySelector('#passwordTable tbody');
+                list.forEach((e, i) => {
+                    const row = tbody.insertRow(); // Použij insertRow()
+                    row.insertCell().textContent = e.service;
+                    row.insertCell().textContent = e.username;
+                    const pwdCell = row.insertCell(); pwdCell.textContent = e.password;
+                    const actCell = row.insertCell(); actCell.innerHTML = `<button onclick="deletePassword(${i})">Smazat</button>`;
+                });
+            } catch (error) {
+                console.error("Chyba při načítání hesel z Firestore:", error);
+                alert('Chyba při načítání hesel z Firestore.');
+            }
+        }
 
-        function deletePassword(idx) {
-            const stored = localStorage.getItem(STORAGE_KEY);
-            if (!stored) return;
-            const list = decryptData(stored);
-            list.splice(idx, 1);
-            localStorage.setItem(STORAGE_KEY, encryptData(list));
-            loadPasswords();
+        // Nová verze deletePassword pro Firestore
+        async function deletePassword(idx) {
+            if (!masterKey) {
+                alert('Master heslo není nastaveno. Přihlaste se prosím.');
+                return;
+            }
+            try {
+                const encryptedList = await loadPasswordsFromFirestore();
+                let list = [];
+                if (encryptedList) {
+                    list = decryptData(encryptedList);
+                }
+
+                if (list.length === 0) return;
+                
+                list.splice(idx, 1);
+
+                await savePasswordsToFirestore(encryptData(list)); // Uložíme šifrovaná data
+                await loadPasswords();
+            } catch (error) {
+                console.error("Chyba při mazání hesla z Firestore:", error);
+                alert('Chyba při mazání hesla z Firestore.');
+            }
         }
 
         function clearForm() {
@@ -290,17 +391,29 @@ async function loadPasswords() {
             document.querySelector('#passwordTable tbody').innerHTML = '';
         }
 
-        function togglePassword(btn) {
-            const inp = btn.parentElement.querySelector('input');
-            inp.type = inp.type === 'password' ? 'text' : 'password';
-        }
+        async function exportToTxt() {
+            if (!masterKey) {
+                alert('Nejsi přihlášen – masterKey chybí!');
+                return;
+            }
+            let list = [];
+            try {
+                const encryptedList = await loadPasswordsFromFirestore();
+                if (encryptedList) {
+                    list = decryptData(encryptedList);
+                }
+            } catch (error) {
+                console.error("Chyba při načítání dat pro export:", error);
+                alert('Chyba při načítání dat pro export.');
+                return;
+            }
 
-        function exportToTxt() {
-            if (!masterKey) return alert('Nejsi přihlášen – masterKey chybí!');
-            const stored = localStorage.getItem(STORAGE_KEY);
-            if (!stored) return alert('Žádná data k exportu');
-            const list = decryptData(stored);
-            let txt = `Master key: ${masterKey}\n\nExport hesel\n\n`;
+            if (list.length === 0) {
+                alert('Žádná data k exportu');
+                return;
+            }
+            
+            let txt = `Master key: ${masterKey}\n\nExport hesel\n\n`; // Exportujeme skutečný masterKey
             list.forEach(e => {
                 txt += `Služba: ${e.service}\nUživatel: ${e.username}\nHeslo: ${e.password}\n---\n`;
             });
@@ -312,20 +425,19 @@ async function loadPasswords() {
             document.getElementById('importFile').click();
         }
 
-        function importFromTxt(event) {
+        async function importFromTxt(event) {
             const file = event.target.files[0];
             if (!file) return;
             
-            if (!masterKey) {
+            if (!masterKey) { // MasterKey musí být načten
                 alert('Nejste přihlášeni! Pro import musíte být přihlášeni.');
                 return;
             }
 
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = async function(e) {
                 const content = e.target.result;
                 
-                // Načtení master klíče ze souboru
                 const masterKeyMatch = content.match(/Master key:\s*(.+)/);
                 if (!masterKeyMatch) {
                     alert('Soubor neobsahuje platný master key!');
@@ -339,7 +451,7 @@ async function loadPasswords() {
                 }
 
                 // Parsování hesel ze souboru
-                const passwordBlocks = content.split('---').slice(0, -1); // Odstranit poslední prázdný blok
+                const passwordBlocks = content.split('---').slice(0, -1);
                 const importedPasswords = [];
                 
                 passwordBlocks.forEach(block => {
@@ -365,24 +477,31 @@ async function loadPasswords() {
                 const action = confirm(`Nalezeno ${importedPasswords.length} hesel. Klikněte OK pro přidání k současným heslům, nebo Cancel pro nahrazení všech hesel.`);
                 
                 let currentPasswords = [];
-                const stored = localStorage.getItem(STORAGE_KEY);
-                if (stored && action) {
-                    currentPasswords = decryptData(stored);
+                if (action) { // OK pro přidání
+                    try {
+                        const encryptedCurrent = await loadPasswordsFromFirestore();
+                        if (encryptedCurrent) {
+                            currentPasswords = decryptData(encryptedCurrent);
+                        }
+                    } catch (error) {
+                        console.error("Chyba při načítání aktuálních hesel pro import:", error);
+                        alert('Chyba při načítání aktuálních hesel pro import.');
+                        return;
+                    }
                 }
 
-                // Kombinace nebo nahrazení hesel
                 const finalPasswords = action ? [...currentPasswords, ...importedPasswords] : importedPasswords;
                 
-                // Uložení do localStorage
-                localStorage.setItem(STORAGE_KEY, encryptData(finalPasswords));
+                try {
+                    await savePasswordsToFirestore(encryptData(finalPasswords)); // Uložíme šifrovaná data
+                    await loadPasswords();
+                    alert(`Import dokončen! ${importedPasswords.length} hesel bylo ${action ? 'přidáno' : 'nahrazeno'}.`);
+                } catch (error) {
+                    console.error("Chyba při ukládání importovaných hesel do Firestore:", error);
+                    alert('Chyba při ukládání importovaných hesel do Firestore.');
+                }
                 
-                // Aktualizace zobrazení
-                loadPasswords();
-                
-                alert(`Import dokončen! ${importedPasswords.length} hesel bylo ${action ? 'přidáno' : 'nahrazeno'}.`);
-                
-                // Vyčištění file inputu
-                event.target.value = '';
+                event.target.value = ''; // Vyčištění file inputu
             };
 
             reader.readAsText(file);
