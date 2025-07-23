@@ -31,11 +31,8 @@ function initializeFirebase() {
             if (user) {
                 currentUserId = user.uid;
                 console.log("Uživatel přihlášen:", currentUserId);
-                // Jakmile je uživatel přihlášen, můžeme načíst hesla z Firestore
-                // Předpokládáme, že 'loadPasswords' je definována v hlavním HTML nebo jiném skriptu
-                // a je schopna pracovat s daty z Firestore.
-                // Pokud je potřeba, můžeš zde volat funkci pro načtení hesel.
-                // loadPasswords(); // Odkomentuj, pokud chceš automaticky načíst po přihlášení
+                // Po přihlášení uživatele se nic automaticky nenačítá,
+                // protože načtení hesel závisí na masterKey, který se musí zadat.
             } else {
                 currentUserId = null;
                 console.log("Uživatel odhlášen.");
@@ -69,18 +66,11 @@ function savePasswordsToFirestore(passwords) {
         return Promise.reject("Uživatel není přihlášen.");
     }
 
-    // Cesta k dokumentu pro ukládání hesel.
-    // Používáme __app_id pro izolaci dat mezi různými aplikacemi v Canvasu.
-    // Data jsou soukromá pro každého uživatele.
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     const docRef = db.collection('artifacts').doc(appId).collection('users').doc(currentUserId).collection('passwordManager').doc('userPasswords');
 
-    // Firestore má omezení na velikost dokumentu (1MB) a na typy dat.
-    // Pokud by hesla byla příliš složitá (např. vnořené pole polí),
-    // bylo by nutné je serializovat na JSON string.
-    // Pro jednoduchá pole objektů jako {service, username, password} to není potřeba.
     return docRef.set({
-        passwords: passwords // Uložíme pole hesel pod klíčem 'passwords'
+        passwords: passwords 
     })
     .then(() => {
         console.log("Hesla úspěšně uložena do Firestore.");
@@ -96,7 +86,7 @@ function savePasswordsToFirestore(passwords) {
 function loadPasswordsFromFirestore() {
     if (!currentUserId) {
         console.error("Uživatel není přihlášen. Nelze načíst hesla z Firestore.");
-        return Promise.resolve([]); // Vrátíme prázdné pole, pokud uživatel není přihlášen
+        return Promise.resolve([]); 
     }
 
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -107,10 +97,10 @@ function loadPasswordsFromFirestore() {
             if (doc.exists) {
                 const data = doc.data();
                 console.log("Hesla načtena z Firestore.");
-                return data.passwords || []; // Vrátíme pole hesel, nebo prázdné pole, pokud 'passwords' neexistuje
+                return data.passwords || null; // Vrátíme přímo šifrovaný string nebo null
             } else {
                 console.log("Dokument s hesly pro tohoto uživatele neexistuje.");
-                return [];
+                return null;
             }
         })
         .catch(error => {
@@ -119,6 +109,56 @@ function loadPasswordsFromFirestore() {
         });
 }
 
+// NOVÁ FUNKCE: Ukládání šifrovaného master klíče do Firestore
+function saveEncryptedMasterKeyToFirestore(encryptedMasterKey) {
+    if (!currentUserId) {
+        console.error("Uživatel není přihlášen. Nelze uložit master klíč do Firestore.");
+        return Promise.reject("Uživatel není přihlášen.");
+    }
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const docRef = db.collection('artifacts').doc(appId).collection('users').doc(currentUserId).collection('masterKey').doc('keyData');
+
+    return docRef.set({
+        encryptedKey: encryptedMasterKey
+    })
+    .then(() => {
+        console.log("Šifrovaný master klíč úspěšně uložen do Firestore.");
+        return true;
+    })
+    .catch(error => {
+        console.error("Chyba při ukládání šifrovaného master klíče do Firestore:", error);
+        return Promise.reject(error);
+    });
+}
+
+// NOVÁ FUNKCE: Načítání šifrovaného master klíče z Firestore
+function loadEncryptedMasterKeyFromFirestore() {
+    if (!currentUserId) {
+        console.error("Uživatel není přihlášen. Nelze načíst master klíč z Firestore.");
+        return Promise.resolve(null); // Vrátíme null, pokud uživatel není přihlášen
+    }
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const docRef = db.collection('artifacts').doc(appId).collection('users').doc(currentUserId).collection('masterKey').doc('keyData');
+
+    return docRef.get()
+        .then(doc => {
+            if (doc.exists) {
+                const data = doc.data();
+                console.log("Šifrovaný master klíč načten z Firestore.");
+                return data.encryptedKey || null; 
+            } else {
+                console.log("Dokument s master klíčem pro tohoto uživatele neexistuje.");
+                return null;
+            }
+        })
+        .catch(error => {
+            console.error("Chyba při načítání šifrovaného master klíče z Firestore:", error);
+            return Promise.reject(error);
+        });
+}
+
+
 // Spustíme inicializaci Firebase, jakmile se načte celý dokument
-// Použijeme DOMContentLoaded, abychom měli jistotu, že jsou všechny elementy dostupné
 document.addEventListener('DOMContentLoaded', initializeFirebase);
