@@ -184,6 +184,35 @@
         .masterkey-modal-buttons .confirm-ok:hover {
             background-color: #45a049;
         }
+        
+        /* Základní styly pro světlý režim (výchozí) */
+:root {
+    --background-color: #ffffff; /* Světle bílá */
+    --text-color: #333333; /* Tmavě šedá */
+    --button-background: #007bff; /* Modrá */
+    --button-text: #ffffff; /* Bílá */
+    --border-color: #cccccc; /* Světle šedá */
+}
+
+/* Styly pro tmavý režim */
+body.dark-mode {
+    --background-color: #222222; /* Tmavě šedá */
+    --text-color: black; /* Světle šedá */
+    --button-background: #6610f2; /* Fialová */
+    --button-text: #ffffff; /* Bílá */
+    --border-color: #555555; /* Tmavší šedá */
+}
+
+/* Aplikace proměnných na elementy */
+body {
+    background-color: var(--background-color);
+    color: var(--text-color);
+    transition: background-color 0.3s ease, color 0.3s ease; /* Plynulý přechod */
+    font-family: Arial, sans-serif; /* Příklad fontu */
+}
+
+ 
+
     </style>
     <!-- CryptoJS AES -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
@@ -195,13 +224,14 @@
     <script src="firebase-logic.js"></script>
 </head>
 <body>
+    <button id="theme-toggle">Přepnout režim</button>
     <!-- Přihlášení -->
     <div id="loginForm" class="login-container container hidden"> <!-- Přidána třída hidden zde -->
         <h1>Přihlášení</h1>
         <p>Pro synchronizaci hesel mezi zařízeními se přihlaste přes Google.</p>
         <button onclick="signInWithGoogle()" style="background-color: #DB4437; color: white;">Přihlásit přes Google</button>
     </div>
-
+ 
     <!-- Hlavní obsah -->
     <div id="mainContent" class="container hidden">
         <button class="logout-btn" onclick="logout()">Odhlásit</button>
@@ -667,6 +697,32 @@
 
             reader.readAsText(file);
         }
+        
+       document.addEventListener('DOMContentLoaded', () => {
+        const themeToggle = document.getElementById('theme-toggle');
+        const body = document.body;
+
+        // A. Funkce pro nastavení režimu
+        const setInitialTheme = () => {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                body.classList.add('dark-mode');
+            } else {
+                body.classList.remove('dark-mode');
+            }
+        };
+
+        // B. Nastavíme režim hned po načtení stránky
+        setInitialTheme();
+
+        // C. Posluchač události pro tlačítko
+        themeToggle.addEventListener('click', () => {
+            body.classList.toggle('dark-mode'); // Přepne třídu 'dark-mode'
+            const currentTheme = body.classList.contains('dark-mode') ? 'dark' : 'light';
+            localStorage.setItem('theme', currentTheme); // Uloží preference do localStorage
+            console.log(`Režim přepnut na: ${currentTheme}`); // Pro tvou kontrolu v konzoli
+        });
+    });
     </script>
 </body>
 </html>
