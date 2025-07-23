@@ -4,14 +4,6 @@
     <meta charset="UTF-8">
     <title>Šifrovaný správce hesel</title>
     <style>
-   /*globální zákaz označování textu.*/
-        html, body {
-  user-select: none;
-  -webkit-user-select: none; /* Safari */
-  -moz-user-select: none;    /* Firefox */
-  -ms-user-select: none;     /* Internet Explorer/Edge */
-}
-        
         body { 
             font-family: Arial, sans-serif; 
             max-width: 1000px; 
@@ -200,19 +192,21 @@
     --button-background: #007bff; /* Modrá */
     --button-text: #ffffff; /* Bílá */
     --border-color: #cccccc; /* Světle šedá */
+    --button: #006400; /*DarkGreen*/
 }
-
+ 
 /* Styly pro tmavý režim */
 body.dark-mode   {
-    --background-color: #222222; /* Tmavě šedá */
+    --background-color: #000000; /* Tmavě šedá */
     --text-color: green; /* Světle šedá */
     --button-background: #6610f2; /* Fialová */
-    --button-text: #ffffff; /* Bílá */
-    --border-color: #555555; /* Tmavší šedá */
+    --button-text: green; /* Bílá */
+    --border-color: #000000; /* Tmavší šedá */
+    --button: #000000; /*černá barva tlačítka*/
 }
 
 /* Aplikace proměnných na elementy */
-body, #mainContent, .container,  h1, #passwordTable, th, label, input, .masterkey-modal-content, masterkey-modal-content, .masterkey-modal-overlay  {
+body, #mainContent, .container,  h1, #passwordTable, th, label, input, .masterkey-modal-content, .masterkey-modal-overlay, .masterkey-modal-message  {
     background-color: var(--background-color);
     color: var(--text-color);
     transition: background-color 0.3s ease, color 0.3s ease; /* Plynulý přechod */
@@ -230,7 +224,7 @@ body, #mainContent, .container,  h1, #passwordTable, th, label, input, .masterke
         }
         
         #deletePassword, .deletePassword{ 
-        display: none;
+        display: hidden;
         }
     </style>
     <!-- CryptoJS AES -->
@@ -279,7 +273,7 @@ body, #mainContent, .container,  h1, #passwordTable, th, label, input, .masterke
         </div>
         
         <table id="passwordTable">
-            <thead><tr><th>Služba</th><th>Uživatel</th><th>Heslo</th></tr></thead>
+            <thead><tr><th>Služba</th><th>Uživatel</th><th>Heslo</th><th>Akce</th></tr></thead>
             <tbody></tbody>
         </table>
     </div>
