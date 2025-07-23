@@ -51,6 +51,48 @@
         .password-toggle:hover {
             color: #333;
         }
+
+        /* Styly pro vlastní modální okno pro zadání/nastavení master klíče */
+        .masterkey-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            
+            justify-content: center;
+            align-items: center;
+            z-index: 1001; /* Vyšší než ostatní */
+        }
+        .masterkey-modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            max-width: 450px;
+            width: 90%;
+            text-align: center;
+        }
+        .masterkey-modal-message {
+            margin-bottom: 20px;
+            font-size: 1.1em;
+            color: #333;
+        }
+        .masterkey-modal-buttons button {
+            margin: 5px;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        .masterkey-modal-buttons .confirm-ok {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .masterkey-modal-buttons .confirm-ok:hover {
+            background-color: #45a049;
+        }
     </style>
     <!-- CryptoJS AES -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
@@ -65,45 +107,8 @@
     <!-- Přihlášení -->
     <div id="loginForm" class="login-container container">
         <h1>Přihlášení</h1>
-        <div class="form-group">
-            <label for="loginPassword">Master heslo:</label>
-            <div class="password-input-group">
-                <input type="password" id="loginPassword" placeholder="Zadejte master heslo">
-                <button type="button" class="password-toggle" onclick="togglePasswordVisibility('loginPassword')">👁️</button>
-            </div>
-        </div>
-        <button onclick="login()">Přihlásit</button>
-        <button class="forgot" onclick="showReset()">Zapomněl(a) jsem heslo</button>
-    </div>
-
-    <!-- Obnova hesla -->
-    <div id="resetForm" class="reset-container container hidden">
-        <h1>Obnova hesla</h1>
-        <div id="emailStep">
-            <div class="form-group">
-                <label for="resetEmail">Registrovaný email:</label>
-                <input type="email" id="resetEmail" placeholder="Zadejte email">
-            </div>
-            <button onclick="sendOTP()">Odeslat OTP</button>
-        </div>
-        <div id="otpStep" class="hidden">
-            <div class="form-group">
-                <label for="resetOTP">Zadej kód OTP:</label>
-                <input type="text" id="resetOTP" placeholder="XXX-XXX">
-            </div>
-            <button onclick="verifyOTP()">Ověřit kód</button>
-        </div>
-        <div id="newPassStep" class="hidden">
-            <div class="form-group">
-                <label for="newMaster">Nové master heslo:</label>
-                <div class="password-input-group">
-                    <input type="password" id="newMaster" placeholder="Nové heslo">
-                    <button type="button" class="password-toggle" onclick="togglePasswordVisibility('newMaster')">👁️</button>
-                </div>
-            </div>
-            <button onclick="resetMasterKey()">Nastavit nové heslo</button>
-        </div>
-        <button class="forgot" onclick="cancelReset()">Zpět k přihlášení</button>
+        <p>Pro synchronizaci hesel mezi zařízeními se přihlaste přes Google.</p>
+        <button onclick="signInWithGoogle()" style="background-color: #DB4437; color: white;">Přihlásit přes Google</button>
     </div>
 
     <!-- Hlavní obsah -->
@@ -139,11 +144,36 @@
         </table>
     </div>
 
+    <!-- Vlastní modální okno pro zadání/nastavení master klíče -->
+    <div id="masterKeyInputModal" class="masterkey-modal-overlay hidden">
+        <div class="masterkey-modal-content">
+            <p id="masterKeyInputModalMessage" class="masterkey-modal-message"></p>
+            <div class="form-group">
+                <label for="masterKeyInputField">Master heslo:</label>
+                <div class="password-input-group">
+                    <input type="password" id="masterKeyInputField" placeholder="Zadejte master heslo">
+                    <button type="button" class="password-toggle" onclick="togglePasswordVisibility('masterKeyInputField')">👁️</button>
+                </div>
+            </div>
+            <div class="masterkey-modal-buttons">
+                <button class="confirm-ok" onclick="handleMasterKeyInput()">Potvrdit</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const STORAGE_KEY = 'encryptedPasswords'; // Toto už se nebude používat pro ukládání hesel, ale pro kompatibilitu s decryptData
-        const EMAIL_KEY = 'registeredEmail';
+        const EMAIL_KEY = 'registeredEmail'; // Toto už se nebude používat
         let masterKey = ''; // Toto bude skutečný master klíč po dešifrování
-        let otpCode = '';
+        let otpCode = ''; // Toto už se nebude používat
+        let isNewMasterKeySetup = false; // Globální proměnná pro sledování, zda nastavujeme nový klíč nebo dešifrujeme existující
+
+        // Zajištění počátečního stavu UI po načtení DOM
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('loginForm').classList.remove('hidden'); // Zobrazí přihlašovací formulář
+            document.getElementById('mainContent').classList.add('hidden'); // Skryje hlavní obsah
+            document.getElementById('masterKeyInputModal').classList.add('hidden'); // Skryje modal pro master klíč
+        });
 
         // Funkce pro přepínání viditelnosti hesla
         function togglePasswordVisibility(inputId) {
@@ -155,138 +185,178 @@
             }
         }
 
-        // Původní funkce login, upravená pro Firestore a načítání master klíče
-        async function login() {
-            const loginPassword = document.getElementById('loginPassword').value;
-            if (!loginPassword) {
-                alert('Zadejte master heslo');
+        // Funkce pro zobrazení modalu zadání/nastavení master klíče
+        function showMasterKeyInputModal(isNewUser) {
+            isNewMasterKeySetup = isNewUser;
+            const modal = document.getElementById('masterKeyInputModal');
+            const messageElement = document.getElementById('masterKeyInputModalMessage');
+            const inputField = document.getElementById('masterKeyInputField');
+
+            if (isNewUser) {
+                messageElement.textContent = 'Vítejte! Nastavte si své nové master heslo pro šifrování dat:';
+                inputField.placeholder = 'Zadejte nové master heslo';
+            } else {
+                messageElement.textContent = 'Zadejte své master heslo pro dešifrování dat:';
+                inputField.placeholder = 'Zadejte master heslo';
+            }
+            inputField.value = ''; // Vyčistí předchozí vstup
+            modal.classList.remove('hidden');
+        }
+
+        // Funkce pro zpracování vstupu master klíče (nastavení nového nebo dešifrování existujícího)
+        async function handleMasterKeyInput() {
+            const enteredKey = document.getElementById('masterKeyInputField').value;
+            if (!enteredKey) {
+                alert('Zadejte master heslo!');
                 return;
             }
 
-            // Pokusíme se načíst šifrovaný master klíč z Firestore
-            try {
-                const encryptedMasterKeyFromFirestore = await loadEncryptedMasterKeyFromFirestore();
-
-                if (encryptedMasterKeyFromFirestore) {
-                    // Pokud klíč existuje, pokusíme se ho dešifrovat pomocí zadaného loginPassword
-                    try {
-                        const bytes = CryptoJS.AES.decrypt(encryptedMasterKeyFromFirestore, loginPassword);
-                        const decryptedMasterKey = bytes.toString(CryptoJS.enc.Utf8);
-                        if (decryptedMasterKey) {
-                            masterKey = decryptedMasterKey; // Nastavíme globální masterKey
-                            document.getElementById('loginPassword').value = '';
-                            await loadPasswords(); // Načteme hesla pomocí nově získaného masterKey
-                            document.getElementById('loginForm').classList.add('hidden');
-                            document.getElementById('mainContent').classList.remove('hidden');
-                        } else {
-                            alert('Špatné master heslo nebo poškozený klíč.');
-                        }
-                    } catch (e) {
-                        alert('Špatné master heslo.');
-                        console.error("Chyba při dešifrování master klíče:", e);
-                    }
-                } else {
-                    // Pokud master klíč ve Firestore neexistuje, jedná se o první přihlášení
-                    // Zadané loginPassword se stane master klíčem a uloží se šifrovaně do Firestore
-                    const confirmFirstSetup = confirm('Master heslo nebylo nalezeno. Chcete nastavit toto heslo jako vaše nové master heslo?');
-                    if (confirmFirstSetup) {
-                        masterKey = loginPassword; // Zadané heslo je nyní master klíč
-                        const encryptedMasterKey = CryptoJS.AES.encrypt(masterKey, loginPassword).toString(); // Šifrujeme master klíč sám sebou
-                        await saveEncryptedMasterKeyToFirestore(encryptedMasterKey);
-                        document.getElementById('loginPassword').value = '';
-                        // Není potřeba načítat hesla, protože žádná ještě nejsou
-                        document.getElementById('loginForm').classList.add('hidden');
-                        document.getElementById('mainContent').classList.remove('hidden');
-                        alert('Master heslo úspěšně nastaveno a uloženo!');
-                    } else {
-                        alert('Nastavení master hesla zrušeno.');
-                    }
+            if (isNewMasterKeySetup) {
+                // Případ A: Nastavujeme nový master klíč
+                masterKey = enteredKey;
+                const encryptedMasterKey = CryptoJS.AES.encrypt(masterKey, enteredKey).toString(); // Šifrujeme masterKey sám sebou
+                try {
+                    await saveEncryptedMasterKeyToFirestore(encryptedMasterKey);
+                    document.getElementById('masterKeyInputModal').classList.add('hidden');
+                    document.getElementById('mainContent').classList.remove('hidden');
+                    alert('Master heslo úspěšně nastaveno a uloženo do cloudu!');
+                    await loadPasswords(); // Načteme hesla (pro nového uživatele by měla být prázdná)
+                } catch (error) {
+                    console.error("Chyba při ukládání nového master klíče:", error);
+                    alert('Chyba při ukládání master klíče do cloudu.');
                 }
-            } catch (error) {
-                console.error("Chyba při komunikaci s Firestore pro master klíč:", error);
-                alert('Chyba při načítání master klíče z cloudu. Zkuste to znovu.');
+            } else {
+                // Případ B: Dešifrujeme existující master klíč
+                try {
+                    const encryptedMasterKeyFromFirestore = await loadEncryptedMasterKeyFromFirestore();
+                    if (!encryptedMasterKeyFromFirestore) {
+                        alert('Chyba: Šifrovaný master klíč nebyl nalezen ve Firestore.');
+                        return;
+                    }
+                    const bytes = CryptoJS.AES.decrypt(encryptedMasterKeyFromFirestore, enteredKey);
+                    const decryptedMasterKey = bytes.toString(CryptoJS.enc.Utf8);
+
+                    if (decryptedMasterKey) {
+                        masterKey = decryptedMasterKey; // Nastavíme globální masterKey
+                        document.getElementById('masterKeyInputModal').classList.add('hidden');
+                        document.getElementById('mainContent').classList.remove('hidden');
+                        alert('Přihlášení úspěšné! Hesla načtena.');
+                        await loadPasswords(); // Načteme hesla s nyní známým masterKey
+                    } else {
+                        alert('Nesprávné master heslo. Zkuste to znovu.');
+                    }
+                } catch (error) {
+                    console.error("Chyba při dešifrování master klíče:", error);
+                    alert('Chyba při dešifrování master klíče. Zkontrolujte heslo.');
+                }
             }
         }
+
+        // Funkce pro přihlášení přes Google (volaná z tlačítka)
+        async function signInWithGoogle() {
+            // Skryjeme loginForm okamžitě po kliknutí na tlačítko
+            document.getElementById('loginForm').classList.add('hidden'); 
+            try {
+                await signInWithGoogleProvider(); // Volá funkci z firebase-logic.js
+                // onUserAuthenticated se postará o zobrazení správného UI
+            } catch (error) {
+                console.error("Chyba při přihlášení přes Google:", error);
+                alert('Chyba při přihlášení přes Google. Zkuste to znovu.');
+                // Pokud přihlášení selže, zobrazíme loginForm zpět
+                document.getElementById('loginForm').classList.remove('hidden'); 
+            }
+        }
+
+        // Tato funkce se zavolá z firebase-logic.js po změně stavu autentizace
+        window.onUserAuthenticated = async (user) => {
+            if (user) {
+                console.log("Uživatel ověřen:", user.uid);
+                
+                // Zobrazíme hlavní obsah, pokud ještě není viditelný
+                // Tato podmínka je důležitá, aby se hlavní obsah zobrazil až po úspěšném přihlášení
+                // a ne při každé změně stavu autentizace, která se může stát na pozadí.
+                if (document.getElementById('mainContent').classList.contains('hidden')) {
+                    document.getElementById('mainContent').classList.remove('hidden');
+                }
+
+                try {
+                    const encryptedMasterKeyFromFirestore = await loadEncryptedMasterKeyFromFirestore();
+                    
+                    if (encryptedMasterKeyFromFirestore) {
+                        // Master klíč existuje, zobrazíme modal pro zadání hesla k dešifrování
+                        showMasterKeyInputModal(false); // isNewUser = false
+                    } else {
+                        // Klíč neexistuje, uživatel se přihlašuje poprvé, zobrazíme modal pro nastavení nového klíče
+                        showMasterKeyInputModal(true); // isNewUser = true
+                    }
+                } catch (error) {
+                    console.error("Chyba při zpracování autentizace:", error);
+                    alert('Chyba při načítání uživatelských dat. Zkuste se přihlásit znovu.');
+                    logout(); // Odhlásit uživatele v případě chyby
+                }
+            } else {
+                console.log("Uživatel odhlášen.");
+                logout(); // Vrátit se na přihlašovací obrazovku
+            }
+        };
+
 
         function logout() {
             masterKey = '';
             clearTable();
+            // Odhlášení z Firebase
+            if (auth) {
+                auth.signOut().then(() => {
+                    console.log("Uživatel odhlášen z Firebase.");
+                }).catch((error) => {
+                    console.error("Chyba při odhlašování z Firebase:", error);
+                });
+            }
             document.getElementById('mainContent').classList.add('hidden');
             document.getElementById('loginForm').classList.remove('hidden');
         }
 
-        function showReset() {
-            document.getElementById('loginForm').classList.add('hidden');
-            document.getElementById('resetForm').classList.remove('hidden');
-        }
-
-        function cancelReset() {
-            document.getElementById('resetForm').classList.add('hidden');
-            document.getElementById('loginForm').classList.remove('hidden');
-        }
-
-        function sendOTP() {
-            const email = document.getElementById('resetEmail').value;
-            if (!email) {
-                alert('Zadejte email');
-                return;
-            }
-            localStorage.setItem(EMAIL_KEY, email);
-            otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-            alert(`Váš OTP kód (pro testovací účely): ${otpCode}`);
-            document.getElementById('emailStep').classList.add('hidden');
-            document.getElementById('otpStep').classList.remove('hidden');
-        }
-
-        async function verifyOTP() {
-            const entered = document.getElementById('resetOTP').value;
-            if (entered === otpCode) {
-                document.getElementById('otpStep').classList.add('hidden');
-                document.getElementById('newPassStep').classList.remove('hidden');
-            } else {
-                alert('Špatný kód OTP');
-            }
-        }
-
+        // Funkce pro obnovu hesla (staré funkce, které se nyní nepoužívají s Google Auth)
+        // Ponechány pro referenci, ale nejsou volány z UI
+        function showReset() { /* ... */ }
+        function cancelReset() { /* ... */ }
+        function sendOTP() { /* ... */ }
+        function verifyOTP() { /* ... */ }
+        // Funkce resetMasterKey je nyní upravena pro použití v modalu
         async function resetMasterKey() {
-            const newKey = document.getElementById('newMaster').value;
-            if (!newKey) {
-                alert('Zadejte nové heslo');
-                return;
-            }
-            
-            // Nový master klíč se stane klíčem pro šifrování dat
-            masterKey = newKey; 
-            // A také klíčem, kterým se šifruje samotný master klíč pro uložení do Firestore
-            const encryptedMasterKey = CryptoJS.AES.encrypt(masterKey, newKey).toString(); 
-
-            try {
-                await saveEncryptedMasterKeyToFirestore(encryptedMasterKey);
-                clearTable();
-                alert('Master heslo bylo úspěšně resetováno a uloženo do cloudu! Přihlaste se novým heslem.');
-                document.getElementById('resetForm').classList.add('hidden');
-                document.getElementById('loginForm').classList.remove('hidden');
-            } catch (error) {
-                console.error("Chyba při resetování master klíče do Firestore:", error);
-                alert('Chyba při resetování master klíče do cloudu.');
-            }
+            // Tato funkce by se volala, pokud bys chtěl mít tlačítko "Zapomněl jsem master heslo"
+            // a chtěl ho vynulovat a nastavit nové.
+            // Prozatím se spoléháme na flow po přihlášení Googlem.
+            // Pokud ji budeš chtít znovu aktivovat, bude potřeba ji propojit s UI.
+            alert('Funkce resetMasterKey je v tuto chvíli neaktivní. Pro změnu master hesla se přihlaste a pak můžete hesla exportovat a importovat s novým master klíčem, nebo smazat stávající a nastavit nové.');
         }
+
 
         function encryptData(data) {
             // Používá globální masterKey, který je načten z Firestore
+            if (!masterKey) {
+                console.error("Master klíč není nastaven pro šifrování dat.");
+                alert('Chyba: Master klíč není nastaven pro šifrování dat.');
+                throw new Error("Master key not set for encryption.");
+            }
             return CryptoJS.AES.encrypt(JSON.stringify(data), masterKey).toString();
         }
 
         function decryptData(cipher) {
             try {
                 // Používá globální masterKey, který je načten z Firestore
+                if (!masterKey) {
+                    console.error("Master klíč není nastaven pro dešifrování dat.");
+                    alert('Chyba: Master klíč není nastaven pro dešifrování dat.');
+                    throw new Error("Master key not set for decryption.");
+                }
                 const bytes = CryptoJS.AES.decrypt(cipher, masterKey);
                 const txt = bytes.toString(CryptoJS.enc.Utf8);
                 return JSON.parse(txt);
             } catch (e) {
                 console.error("Chyba při dešifrování dat hesel:", e);
                 // Pokud dešifrování selže, může to znamenat špatný master klíč nebo poškozená data
-                alert('Chyba při dešifrování hesel. Zkontrolujte master heslo.');
+                alert('Chyba při dešifrování hesel. Zkontrolujte master heslo nebo se přihlaste znovu.');
                 return [];
             }
         }
