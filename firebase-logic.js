@@ -1,4 +1,4 @@
-// firebase-logic.js
+// firebase-logic.js 
 // Tento soubor obsahuje veškerou logiku pro interakci s Firebase Firestore.
 
 // Firebase konfigurace, kterou jsi mi dal, Jirko.
