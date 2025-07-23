@@ -4,28 +4,119 @@
     <meta charset="UTF-8">
     <title>Šifrovaný správce hesel</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background-color: #f5f5f5; }
-        .container { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .login-container, .reset-container { max-width: 400px; margin: 100px auto; text-align: center; }
-        h1 { color: #333; text-align: center; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; color: #555; }
-        input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
-        button { background-color: #4CAF50; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
-        button:hover { background-color: #45a049; }
-        .export-btn { background-color: #2196F3; }
-        .export-btn:hover { background-color: #1976D2; }
-        .import-btn { background-color: #FF9800; }
-        .import-btn:hover { background-color: #F57C00; }
-        .logout-btn { background-color: #f44336; float: right; }
-        .logout-btn:hover { background-color: #da190b; }
-        .forgot { background: none; border: none; color: #007bff; cursor: pointer; text-decoration: underline; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #f2f2f2; }
-        .hidden { display: none; }
-        .file-input { display: none; }
-        .button-group { margin-top: 20px; }
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 800px; 
+            margin: 20px auto; 
+            padding: 20px; 
+            background-color: #f5f5f5; 
+        
+        }
+        .container { 
+            background-color: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+        
+        }
+        /* loginForm bude skrytý pomocí třídy .hidden v HTML, ne zde */
+        .login-container { 
+            max-width: 400px; 
+            margin: 100px auto; 
+            text-align: center; 
+        
+        } 
+        h1 { color: #333; 
+            text-align: center; 
+        
+        }
+        .form-group { 
+            margin-bottom: 15px; 
+        
+        }
+        label { 
+            display: block; 
+            margin-bottom: 5px; 
+            color: #555; 
+        
+        }
+        input { 
+            width: 100%; 
+            padding: 8px; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+            box-sizing: border-box; 
+        
+        }
+        button { 
+            background-color: #4CAF50; 
+            color: white; padding: 10px 15px; 
+            border: none; border-radius: 4px; 
+            cursor: pointer; margin: 5px; 
+        
+        }
+        button:hover { 
+            background-color: #45a049; 
+        
+        }
+        .export-btn { 
+            background-color: #2196F3; 
+        
+        }
+        .export-btn:hover { 
+            background-color: #1976D2; 
+        
+        }
+        .import-btn { 
+            background-color: #FF9800; 
+        
+        }
+        .import-btn:hover { 
+            background-color: #F57C00; 
+        
+        }
+        .logout-btn { 
+            background-color: #f44336; 
+            float: right; 
+        
+        }
+        .logout-btn:hover { 
+            background-color: #da190b; 
+        
+        }
+        .forgot { 
+            background: none; 
+            border: none; 
+            color: #007bff; 
+            cursor: pointer; 
+            text-decoration: underline; 
+        
+        }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 20px; 
+        
+        }
+        th, td { 
+            padding: 12px; 
+            text-align: left; 
+            border-bottom: 1px solid #ddd; 
+        
+        }
+        th { 
+            background-color: #f2f2f2; 
+        
+        }
+        .hidden { 
+            display: none; 
+        
+        } /* Tato třída bude řídit viditelnost */
+        .file-input { display: none; 
+        
+        }
+        .button-group { margin-top: 20px; 
+        }
         
         /* Styly pro přepínání viditelnosti hesla */
         .password-input-group {
@@ -60,7 +151,7 @@
             width: 100%;
             height: 100%;
             background-color: rgba(0, 0, 0, 0.6);
-            
+             /* tady byl display: flex; a byl odstraněn že už nejni potřeba.*/
             justify-content: center;
             align-items: center;
             z-index: 1001; /* Vyšší než ostatní */
@@ -105,7 +196,7 @@
 </head>
 <body>
     <!-- Přihlášení -->
-    <div id="loginForm" class="login-container container">
+    <div id="loginForm" class="login-container container hidden"> <!-- Přidána třída hidden zde -->
         <h1>Přihlášení</h1>
         <p>Pro synchronizaci hesel mezi zařízeními se přihlaste přes Google.</p>
         <button onclick="signInWithGoogle()" style="background-color: #DB4437; color: white;">Přihlásit přes Google</button>
@@ -170,9 +261,12 @@
 
         // Zajištění počátečního stavu UI po načtení DOM
         document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('loginForm').classList.remove('hidden'); // Zobrazí přihlašovací formulář
-            document.getElementById('mainContent').classList.add('hidden'); // Skryje hlavní obsah
-            document.getElementById('masterKeyInputModal').classList.add('hidden'); // Skryje modal pro master klíč
+            // Při startu stránky jsou všechny hlavní části skryté.
+            // Viditelnost loginFormu a mainContentu bude řízena funkcí window.onUserAuthenticated
+            // po inicializaci Firebase a zjištění stavu přihlášení.
+            document.getElementById('mainContent').classList.add('hidden'); 
+            document.getElementById('masterKeyInputModal').classList.add('hidden'); 
+            // loginForm je již skrytý v HTML pomocí třídy 'hidden'
         });
 
         // Funkce pro přepínání viditelnosti hesla
@@ -272,12 +366,9 @@
             if (user) {
                 console.log("Uživatel ověřen:", user.uid);
                 
-                // Zobrazíme hlavní obsah, pokud ještě není viditelný
-                // Tato podmínka je důležitá, aby se hlavní obsah zobrazil až po úspěšném přihlášení
-                // a ne při každé změně stavu autentizace, která se může stát na pozadí.
-                if (document.getElementById('mainContent').classList.contains('hidden')) {
-                    document.getElementById('mainContent').classList.remove('hidden');
-                }
+                // Zobrazíme hlavní obsah a skryjeme loginForm
+                document.getElementById('mainContent').classList.remove('hidden');
+                document.getElementById('loginForm').classList.add('hidden'); // Zajistí, že je skrytý
 
                 try {
                     const encryptedMasterKeyFromFirestore = await loadEncryptedMasterKeyFromFirestore();
