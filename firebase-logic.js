@@ -1,0 +1,124 @@
+// firebase-logic.js
+// Tento soubor obsahuje veškerou logiku pro interakci s Firebase Firestore.
+
+// Firebase konfigurace, kterou jsi mi dal, Jirko.
+const firebaseConfig = {
+    apiKey: "AIzaSyA62qLLzSPSN5LSx7o7Rehv-UgBr5RwgWI",
+    authDomain: "sprava-hesel-jirka.firebaseapp.com",
+    projectId: "sprava-hesel-jirka",
+    storageBucket: "sprava-hesel-jirka.firebasestorage.app",
+    messagingSenderId: "736911248601",
+    appId: "1:736911248601:web:345f1a1a2b90bbaac002c8",
+    measurementId: "G-C8S2XW6ZW8"
+};
+
+// Globální proměnné pro Firebase instance
+let app;
+let db;
+let auth;
+let currentUserId = null; // ID aktuálního uživatele
+
+// Inicializace Firebase
+function initializeFirebase() {
+    // Zkontrolujeme, zda už Firebase není inicializováno, abychom se vyhnuli chybám.
+    if (!app) {
+        app = firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore(app);
+        auth = firebase.auth(app);
+
+        // Nastavení posluchače pro změny stavu autentizace
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                currentUserId = user.uid;
+                console.log("Uživatel přihlášen:", currentUserId);
+                // Jakmile je uživatel přihlášen, můžeme načíst hesla z Firestore
+                // Předpokládáme, že 'loadPasswords' je definována v hlavním HTML nebo jiném skriptu
+                // a je schopna pracovat s daty z Firestore.
+                // Pokud je potřeba, můžeš zde volat funkci pro načtení hesel.
+                // loadPasswords(); // Odkomentuj, pokud chceš automaticky načíst po přihlášení
+            } else {
+                currentUserId = null;
+                console.log("Uživatel odhlášen.");
+            }
+        });
+
+        // Přihlášení uživatele. Použijeme buď custom token, pokud je k dispozici (pro Canvas),
+        // nebo anonymní přihlášení.
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            auth.signInWithCustomToken(__initial_auth_token)
+                .then(() => console.log("Přihlášen custom tokenem."))
+                .catch(error => {
+                    console.error("Chyba při přihlašování custom tokenem:", error);
+                    auth.signInAnonymously()
+                        .then(() => console.log("Přihlášen anonymně po chybě s tokenem."))
+                        .catch(err => console.error("Chyba při anonymním přihlašování:", err));
+                });
+        } else {
+            auth.signInAnonymously()
+                .then(() => console.log("Přihlášen anonymně."))
+                .catch(error => console.error("Chyba při anonymním přihlašování:", error));
+        }
+    }
+}
+
+// Funkce pro uložení hesel do Firestore
+// Přijímá pole hesel.
+function savePasswordsToFirestore(passwords) {
+    if (!currentUserId) {
+        console.error("Uživatel není přihlášen. Nelze uložit hesla do Firestore.");
+        return Promise.reject("Uživatel není přihlášen.");
+    }
+
+    // Cesta k dokumentu pro ukládání hesel.
+    // Používáme __app_id pro izolaci dat mezi různými aplikacemi v Canvasu.
+    // Data jsou soukromá pro každého uživatele.
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const docRef = db.collection('artifacts').doc(appId).collection('users').doc(currentUserId).collection('passwordManager').doc('userPasswords');
+
+    // Firestore má omezení na velikost dokumentu (1MB) a na typy dat.
+    // Pokud by hesla byla příliš složitá (např. vnořené pole polí),
+    // bylo by nutné je serializovat na JSON string.
+    // Pro jednoduchá pole objektů jako {service, username, password} to není potřeba.
+    return docRef.set({
+        passwords: passwords // Uložíme pole hesel pod klíčem 'passwords'
+    })
+    .then(() => {
+        console.log("Hesla úspěšně uložena do Firestore.");
+        return true;
+    })
+    .catch(error => {
+        console.error("Chyba při ukládání hesel do Firestore:", error);
+        return Promise.reject(error);
+    });
+}
+
+// Funkce pro načtení hesel z Firestore
+function loadPasswordsFromFirestore() {
+    if (!currentUserId) {
+        console.error("Uživatel není přihlášen. Nelze načíst hesla z Firestore.");
+        return Promise.resolve([]); // Vrátíme prázdné pole, pokud uživatel není přihlášen
+    }
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const docRef = db.collection('artifacts').doc(appId).collection('users').doc(currentUserId).collection('passwordManager').doc('userPasswords');
+
+    return docRef.get()
+        .then(doc => {
+            if (doc.exists) {
+                const data = doc.data();
+                console.log("Hesla načtena z Firestore.");
+                return data.passwords || []; // Vrátíme pole hesel, nebo prázdné pole, pokud 'passwords' neexistuje
+            } else {
+                console.log("Dokument s hesly pro tohoto uživatele neexistuje.");
+                return [];
+            }
+        })
+        .catch(error => {
+            console.error("Chyba při načítání hesel z Firestore:", error);
+            return Promise.reject(error);
+        });
+}
+
+// Spustíme inicializaci Firebase, jakmile se načte celý dokument
+// Použijeme DOMContentLoaded, abychom měli jistotu, že jsou všechny elementy dostupné
+document.addEventListener('DOMContentLoaded', initializeFirebase);

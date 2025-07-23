@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>Šifrovaný správce hesel</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background-color: #f5f5f5; }
+        .container { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .login-container, .reset-container { max-width: 400px; margin: 100px auto; text-align: center; }
+        h1 { color: #333; text-align: center; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; color: #555; }
+        input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #4CAF50; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+        button:hover { background-color: #45a049; }
+        .export-btn { background-color: #2196F3; }
+        .export-btn:hover { background-color: #1976D2; }
+        .import-btn { background-color: #FF9800; }
+        .import-btn:hover { background-color: #F57C00; }
+        .logout-btn { background-color: #f44336; float: right; }
+        .logout-btn:hover { background-color: #da190b; }
+        .forgot { background: none; border: none; color: #007bff; cursor: pointer; text-decoration: underline; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f2f2f2; }
+        .hidden { display: none; }
+        .file-input { display: none; }
+        .button-group { margin-top: 20px; }
+        
+        /* Styly pro přepínání viditelnosti hesla */
+        .password-input-group {
+            position: relative;
+            width: 100%;
+        }
+        .password-input-group input {
+            padding-right: 40px; /* Místo pro tlačítko */
+        }
+        .password-toggle {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #555;
+            font-size: 1.2em;
+            padding: 0;
+            line-height: 1;
+        }
+        .password-toggle:hover {
+            color: #333;
+        }
+    </style>
+    <!-- CryptoJS AES -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+</head>
+<body>
+   <!-- Přihlášení -->
+    <div id="loginForm" class="login-container container">
+        <h1>Přihlášení</h1>
+        <div class="form-group">
+            <label for="loginPassword">Master heslo:</label>
+            <div class="password-input-group">
+                <input type="password" id="loginPassword" placeholder="Zadejte master heslo">
+                <button type="button" class="password-toggle" onclick="togglePasswordVisibility('loginPassword')">👁️</button>
+            </div>
+        </div>
+        <button onclick="login()">Přihlásit</button>
+        <button class="forgot" onclick="showReset()">Zapomněl(a) jsem heslo</button>
+    </div>-->
+
+    <!-- Obnova hesla -->
+    <div id="resetForm" class="reset-container container hidden">
+        <h1>Obnova hesla</h1>
+        <div id="emailStep">
+            <div class="form-group">
+                <label for="resetEmail">Registrovaný email:</label>
+                <input type="email" id="resetEmail" placeholder="Zadejte email">
+            </div>
+            <button onclick="sendOTP()">Odeslat OTP</button>
+        </div>
+        <div id="otpStep" class="hidden">
+            <div class="form-group">
+                <label for="resetOTP">Zadej kód OTP:</label>
+                <input type="text" id="resetOTP" placeholder="XXX-XXX">
+            </div>
+            <button onclick="verifyOTP()">Ověřit kód</button>
+        </div>
+        <div id="newPassStep" class="hidden">
+            <div class="form-group">
+                <label for="newMaster">Nové master heslo:</label>
+                <input type="password" id="newMaster" placeholder="Nové heslo">
+            </div>
+            <button onclick="resetMasterKey()">Nastavit nové heslo</button>
+        </div>
+        <button class="forgot" onclick="cancelReset()">Zpět k přihlášení</button>
+    </div>
+
+    <!-- Hlavní obsah -->
+    <div id="mainContent" class="container hidden">
+        <button class="logout-btn" onclick="logout()">Odhlásit</button>
+        <h1>Šifrovaný správce hesel</h1>
+        <div class="form-group">
+            <label for="service">Služba:</label>
+            <input type="text" id="service" placeholder="např. Google">
+        </div>
+        <div class="form-group">
+            <label for="username">Uživatelské jméno:</label>
+            <input type="text" id="username" placeholder="Uživatel">
+        </div>
+        <div class="form-group">
+            <label for="password">Heslo:</label>
+            <input type="password" id="password" placeholder="Heslo">
+        </div>
+        <button onclick="savePassword()">Uložit</button>
+        
+        <div class="button-group">
+            <button class="export-btn" onclick="exportToTxt()">Export TXT</button>
+            <button class="import-btn" onclick="triggerImport()">Import TXT</button>
+            <input type="file" id="importFile" class="file-input" accept=".txt" onchange="importFromTxt(event)">
+        </div>
+        
+        <table id="passwordTable">
+            <thead><tr><th>Služba</th><th>Uživatel</th><th>Heslo</th><th>Akce</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+<!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="firebase-logic.js"></script>
+    <script>
+        const STORAGE_KEY = 'encryptedPasswords';
+        const EMAIL_KEY = 'registeredEmail';
+        let masterKey = '';
+        let otpCode = '';
+           
+        
+        // Funkce pro přepínání viditelnosti hesla
+        function togglePasswordVisibility(inputId) {
+            const input = document.getElementById(inputId);
+            if (input.type === 'password') {
+                input.type = 'text';
+            } else {
+                input.type = 'password';
+            }
+        }
+        
+        function login() {
+            const pwd = document.getElementById('loginPassword').value;
+            if (!pwd) return alert('Zadejte master heslo');
+            masterKey = pwd;
+            document.getElementById('loginPassword').value = '';
+            loadPasswords();
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('mainContent').classList.remove('hidden');
+        }
+
+        function logout() {
+            masterKey = '';
+            clearTable();
+            document.getElementById('mainContent').classList.add('hidden');
+            document.getElementById('loginForm').classList.remove('hidden');
+        }
+
+        function showReset() {
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('resetForm').classList.remove('hidden');
+        }
+
+        function cancelReset() {
+            document.getElementById('resetForm').classList.add('hidden');
+            document.getElementById('loginForm').classList.remove('hidden');
+        }
+
+        function sendOTP() {
+            const email = document.getElementById('resetEmail').value;
+            if (!email) return alert('Zadejte email');
+            localStorage.setItem(EMAIL_KEY, email);
+            otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+            alert(`Váš OTP kód (pro testovací účely): ${otpCode}`);
+            document.getElementById('emailStep').classList.add('hidden');
+            document.getElementById('otpStep').classList.remove('hidden');
+        }
+
+        function verifyOTP() {
+            const entered = document.getElementById('resetOTP').value;
+            if (entered === otpCode) {
+                document.getElementById('otpStep').classList.add('hidden');
+                document.getElementById('newPassStep').classList.remove('hidden');
+            } else {
+                alert('Špatný kód OTP');
+            }
+        }
+
+        function resetMasterKey() {
+            const newKey = document.getElementById('newMaster').value;
+            if (!newKey) return alert('Zadejte nové heslo');
+            masterKey = newKey;
+            clearTable();
+            alert('Master heslo bylo úspěšně resetováno! Přihlaste se novým heslem.');
+            document.getElementById('resetForm').classList.add('hidden');
+            document.getElementById('loginForm').classList.remove('hidden');
+        }
+
+        function encryptData(data) {
+            return CryptoJS.AES.encrypt(JSON.stringify(data), masterKey).toString();
+        }
+
+        function decryptData(cipher) {
+            try {
+                const bytes = CryptoJS.AES.decrypt(cipher, masterKey);
+                const txt = bytes.toString(CryptoJS.enc.Utf8);
+                return JSON.parse(txt);
+            } catch {
+                return [];
+            }
+        }
+
+        // Nová verze savePassword pro Firestore
+async function savePassword() {
+    const service = document.getElementById('service').value;
+    const user = document.getElementById('username').value;
+    const pwd = document.getElementById('password').value;
+    if (!service || !user || !pwd) {
+        // Použij vlastní modal nebo zprávu, ne alert()
+        console.warn('Vyplňte všechna pole');
+        return;
+    }
+
+    let list = [];
+    // Nejprve načti aktuální hesla z Firestore
+    try {
+        list = await loadPasswordsFromFirestore();
+    } catch (error) {
+        console.error("Chyba při načítání hesel před uložením:", error);
+        // Zde bys mohl zobrazit uživateli zprávu o chybě
+        return;
+    }
+
+    list.push({ service, username: user, password: pwd });
+
+    // Uložit aktualizovaný seznam do Firestore
+    try {
+        await savePasswordsToFirestore(list);
+        loadPasswords(); // Načti a zobraz aktualizovaná hesla
+        clearForm();
+    } catch (error) {
+        console.error("Chyba při ukládání hesel do Firestore:", error);
+        // Zde bys mohl zobrazit uživateli zprávu o chybě
+    }
+}
+
+        // Nová verze loadPasswords pro Firestore
+async function loadPasswords() {
+    clearTable();
+    try {
+        const list = await loadPasswordsFromFirestore();
+        const tbody = document.querySelector('#passwordTable tbody');
+        list.forEach((e, i) => {
+            const row = tbody.insertRow();
+            row.insertCell().textContent = e.service;
+            row.insertCell().textContent = e.username;
+            const pwdCell = row.insertCell(); pwdCell.textContent = e.password;
+            const actCell = row.insertCell(); actCell.innerHTML = `<button onclick="deletePassword(${i})">Smazat</button>`;
+        });
+    } catch (error) {
+        console.error("Chyba při načítání hesel z Firestore:", error);
+        // Zde bys mohl zobrazit uživateli zprávu o chybě
+    }
+}
+
+
+        function deletePassword(idx) {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (!stored) return;
+            const list = decryptData(stored);
+            list.splice(idx, 1);
+            localStorage.setItem(STORAGE_KEY, encryptData(list));
+            loadPasswords();
+        }
+
+        function clearForm() {
+            ['service','username','password'].forEach(id => document.getElementById(id).value='');
+        }
+
+        function clearTable() {
+            document.querySelector('#passwordTable tbody').innerHTML = '';
+        }
+
+        function togglePassword(btn) {
+            const inp = btn.parentElement.querySelector('input');
+            inp.type = inp.type === 'password' ? 'text' : 'password';
+        }
+
+        function exportToTxt() {
+            if (!masterKey) return alert('Nejsi přihlášen – masterKey chybí!');
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (!stored) return alert('Žádná data k exportu');
+            const list = decryptData(stored);
+            let txt = `Master key: ${masterKey}\n\nExport hesel\n\n`;
+            list.forEach(e => {
+                txt += `Služba: ${e.service}\nUživatel: ${e.username}\nHeslo: ${e.password}\n---\n`;
+            });
+            const blob = new Blob([txt], { type: 'text/plain' });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'hesla_a_masterkey.txt'; a.click();
+        }
+
+        function triggerImport() {
+            document.getElementById('importFile').click();
+        }
+
+        function importFromTxt(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            if (!masterKey) {
+                alert('Nejste přihlášeni! Pro import musíte být přihlášeni.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                
+                // Načtení master klíče ze souboru
+                const masterKeyMatch = content.match(/Master key:\s*(.+)/);
+                if (!masterKeyMatch) {
+                    alert('Soubor neobsahuje platný master key!');
+                    return;
+                }
+                
+                const fileMasterKey = masterKeyMatch[1].trim();
+                if (fileMasterKey !== masterKey) {
+                    const confirmImport = confirm('Master key v souboru se liší od vašeho současného klíče. Chcete pokračovat? (Doporučujeme zálohovat současná data)');
+                    if (!confirmImport) return;
+                }
+
+                // Parsování hesel ze souboru
+                const passwordBlocks = content.split('---').slice(0, -1); // Odstranit poslední prázdný blok
+                const importedPasswords = [];
+                
+                passwordBlocks.forEach(block => {
+                    const serviceMatch = block.match(/Služba:\s*(.+)/);
+                    const userMatch = block.match(/Uživatel:\s*(.+)/);
+                    const passMatch = block.match(/Heslo:\s*(.+)/);
+                    
+                    if (serviceMatch && userMatch && passMatch) {
+                        importedPasswords.push({
+                            service: serviceMatch[1].trim(),
+                            username: userMatch[1].trim(),
+                            password: passMatch[1].trim()
+                        });
+                    }
+                });
+
+                if (importedPasswords.length === 0) {
+                    alert('Ve souboru nebyla nalezena žádná platná hesla!');
+                    return;
+                }
+
+                // Nabídka možností importu
+                const action = confirm(`Nalezeno ${importedPasswords.length} hesel. Klikněte OK pro přidání k současným heslům, nebo Cancel pro nahrazení všech hesel.`);
+                
+                let currentPasswords = [];
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored && action) {
+                    currentPasswords = decryptData(stored);
+                }
+
+                // Kombinace nebo nahrazení hesel
+                const finalPasswords = action ? [...currentPasswords, ...importedPasswords] : importedPasswords;
+                
+                // Uložení do localStorage
+                localStorage.setItem(STORAGE_KEY, encryptData(finalPasswords));
+                
+                // Aktualizace zobrazení
+                loadPasswords();
+                
+                alert(`Import dokončen! ${importedPasswords.length} hesel bylo ${action ? 'přidáno' : 'nahrazeno'}.`);
+                
+                // Vyčištění file inputu
+                event.target.value = '';
+            };
+
+            reader.readAsText(file);
+        }
+    </script>
+</body>
+</html>
