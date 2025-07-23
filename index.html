@@ -552,7 +552,7 @@ body, #mainContent, .container,  h1, #passwordTable, th, label, input, .masterke
                     row.insertCell().textContent = e.service;
                     row.insertCell().textContent = e.username;
                     const pwdCell = row.insertCell(); pwdCell.textContent = e.password;
-                    const actCell = row.insertCell(); actCell.innerHTML = `<button onclick="deletePassword(${i})">Smazat</button>`;
+                    //const actCell = row.insertCell(); actCell.innerHTML = `<button onclick="deletePassword(${i})">Smazat</button>`;
                 });
             } catch (error) {
                 console.error("Chyba při načítání hesel z Firestore:", error);
