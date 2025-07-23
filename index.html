@@ -204,7 +204,7 @@ body.dark-mode   {
 }
 
 /* Aplikace proměnných na elementy */
-body, #mainContent, .container,  h1, #passwordTable, th, label, input  {
+body, #mainContent, .container,  h1, #passwordTable, th, label, input, #masterKeyInputModal  {
     background-color: var(--background-color);
     color: var(--text-color);
     transition: background-color 0.3s ease, color 0.3s ease; /* Plynulý přechod */
@@ -219,6 +219,10 @@ body, #mainContent, .container,  h1, #passwordTable, th, label, input  {
             background: green;
              
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        #deletePassword, .deletePassword{ 
+        display: none;
         }
     </style>
     <!-- CryptoJS AES -->
