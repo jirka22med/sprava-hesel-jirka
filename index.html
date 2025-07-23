@@ -195,16 +195,16 @@
 }
 
 /* Styly pro tmavý režim */
-body.dark-mode {
+body.dark-mode   {
     --background-color: #222222; /* Tmavě šedá */
-    --text-color: black; /* Světle šedá */
+    --text-color: white; /* Světle šedá */
     --button-background: #6610f2; /* Fialová */
     --button-text: #ffffff; /* Bílá */
     --border-color: #555555; /* Tmavší šedá */
 }
 
 /* Aplikace proměnných na elementy */
-body {
+body, #mainContent, .container,  h1  {
     background-color: var(--background-color);
     color: var(--text-color);
     transition: background-color 0.3s ease, color 0.3s ease; /* Plynulý přechod */
